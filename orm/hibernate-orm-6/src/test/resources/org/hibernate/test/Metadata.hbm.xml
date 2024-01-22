@@ -30,13 +30,6 @@
 	</class>
 
 
-	<class name="SimpleModule" table="module" lazy="true">
-		<id name="id" column="id">
-			<generator class="native"/>
-		</id>
-		<many-to-one name="config" column="id_config" class="ModuleConfiguration"/>
-	</class>
-
 	<class name="ExtendedSettingsHolder" table="ext_settings_holder" lazy="true">
 		<id name="id" column="id">
 			<generator class="native"/>

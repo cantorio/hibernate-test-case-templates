@@ -15,12 +15,8 @@
  */
 package org.hibernate.bugs;
 
-import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-
-import java.util.List;
-import java.util.stream.Stream;
 
 import org.hibernate.Session;
 import org.hibernate.Transaction;
@@ -29,7 +25,6 @@ import org.hibernate.cfg.Configuration;
 import org.hibernate.test.ExtendedSettings;
 import org.hibernate.test.ExtendedSettingsHolder;
 import org.hibernate.test.ModuleConfiguration;
-import org.hibernate.test.SimpleModule;
 import org.hibernate.testing.junit4.BaseCoreFunctionalTestCase;
 import org.junit.Test;
 
@@ -55,7 +50,7 @@ public class ORMUnitTestCase extends BaseCoreFunctionalTestCase {
 	@Override
 	protected String[] getMappings() {
 		return new String[] {
-				"Metadata.hbm.xml"
+			"Metadata.hbm.xml"
 		};
 	}
 	// If those mappings reside somewhere other than resources/org/hibernate/test, change this.
@@ -89,11 +84,6 @@ public class ORMUnitTestCase extends BaseCoreFunctionalTestCase {
 		
 		s.persist(settings);
 		
-		SimpleModule module = new SimpleModule();
-		module.setConfig(conf);
-		
-		s.persist(module);
-		
 		ExtendedSettingsHolder holder = new ExtendedSettingsHolder();
 		holder.setExtendedSettings(settings);
 		
@@ -105,14 +95,14 @@ public class ORMUnitTestCase extends BaseCoreFunctionalTestCase {
 	}
 
 	@Test
-	public void hhh123TestWithTransactionsError() throws Exception {
+	public void hhh17665TestWithTransactionsError() throws Exception {
 		// BaseCoreFunctionalTestCase automatically creates the SessionFactory and provides the Session.
 		Session s = openSession();
 		
 		doInTransaction(s, () -> {
-			List<SimpleModule> modules = s.createQuery("from SimpleModule", SimpleModule.class).list();
-			assertFalse(modules.isEmpty());
-			assertEquals(modules.get(0).getConfig().getSettings().getData(), "some data");
+			ModuleConfiguration conf = s.get(ModuleConfiguration.class, 1L);
+			// here we load ExtendedSettings by invoking "getData" method => ERROR later
+			assertEquals(conf.getSettings().getData(), "some data");
 		});
 
 		doInTransaction(s, () -> {
@@ -124,33 +114,33 @@ public class ORMUnitTestCase extends BaseCoreFunctionalTestCase {
 	}
 
 	@Test
-	public void hhh123TestWithTransactionsOk() throws Exception {
+	public void hhh17665TestWithTransactionsOk() throws Exception {
 		// BaseCoreFunctionalTestCase automatically creates the SessionFactory and provides the Session.
 		Session s = openSession();
 		
-		// INFO: order of transactions is changed, comparing to hhh123TestWithTransactionsError
+		// INFO: order of transactions is changed, comparing to hhh17665TestWithTransactionsError => OK
 		doInTransaction(s, () -> {
 			ExtendedSettingsHolder settingsHolder = s.get(ExtendedSettingsHolder.class, 1L);
 			assertNotNull(settingsHolder.getExtendedSettings());
 		});
 		
 		doInTransaction(s, () -> {
-			List<SimpleModule> modules = s.createQuery("from SimpleModule", SimpleModule.class).list();
-			assertFalse(modules.isEmpty());
-			assertEquals(modules.get(0).getConfig().getSettings().getData(), "some data");
+			ModuleConfiguration conf = s.get(ModuleConfiguration.class, 1L);
+			// here we load ExtendedSettings by invoking "getData" method => ERROR later
+			assertEquals(conf.getSettings().getData(), "some data");
 		});
 
 		s.close();
 	}
 
 	@Test
-	public void hhh123TestWithoutTransactionsError() throws Exception {
+	public void hhh17665TestWithoutTransactionsError() throws Exception {
 		// BaseCoreFunctionalTestCase automatically creates the SessionFactory and provides the Session.
 		Session s = openSession();
 		
-		List<SimpleModule> modules = s.createQuery("from SimpleModule", SimpleModule.class).list();
-		assertFalse(modules.isEmpty());
-		assertEquals(modules.get(0).getConfig().getSettings().getData(), "some data");
+		ModuleConfiguration conf = s.get(ModuleConfiguration.class, 1L);
+		// here we load ExtendedSettings by invoking "getData" method => ERROR later
+		assertEquals(conf.getSettings().getData(), "some data");
 
 		ExtendedSettingsHolder settingsHolder = s.get(ExtendedSettingsHolder.class, 1L);
 		assertNotNull(settingsHolder.getExtendedSettings());
@@ -159,14 +149,13 @@ public class ORMUnitTestCase extends BaseCoreFunctionalTestCase {
 	}
 
 	@Test
-	public void hhh123TestWithoutTransactionsOk() throws Exception {
+	public void hhh17665TestWithoutTransactionsOk() throws Exception {
 		// BaseCoreFunctionalTestCase automatically creates the SessionFactory and provides the Session.
 		Session s = openSession();
 		
-		List<SimpleModule> modules = s.createQuery("from SimpleModule", SimpleModule.class).list();
-		assertFalse(modules.isEmpty());
+		ModuleConfiguration conf = s.get(ModuleConfiguration.class, 1L);
 		// here no actual loading of ExtendedSettings occurred => no error
-		assertNotNull(modules.get(0).getConfig().getSettings());
+		assertNotNull(conf.getSettings());
 
 		ExtendedSettingsHolder settingsHolder = s.get(ExtendedSettingsHolder.class, 1L);
 		assertNotNull(settingsHolder.getExtendedSettings());
