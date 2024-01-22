@@ -15,10 +15,21 @@
  */
 package org.hibernate.bugs;
 
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+
+import java.util.List;
+import java.util.stream.Stream;
+
 import org.hibernate.Session;
 import org.hibernate.Transaction;
 import org.hibernate.cfg.AvailableSettings;
 import org.hibernate.cfg.Configuration;
+import org.hibernate.test.ExtendedSettings;
+import org.hibernate.test.ExtendedSettingsHolder;
+import org.hibernate.test.ModuleConfiguration;
+import org.hibernate.test.SimpleModule;
 import org.hibernate.testing.junit4.BaseCoreFunctionalTestCase;
 import org.junit.Test;
 
@@ -37,8 +48,6 @@ public class ORMUnitTestCase extends BaseCoreFunctionalTestCase {
 	@Override
 	protected Class[] getAnnotatedClasses() {
 		return new Class[] {
-//				Foo.class,
-//				Bar.class
 		};
 	}
 
@@ -46,8 +55,7 @@ public class ORMUnitTestCase extends BaseCoreFunctionalTestCase {
 	@Override
 	protected String[] getMappings() {
 		return new String[] {
-//				"Foo.hbm.xml",
-//				"Bar.hbm.xml"
+				"Metadata.hbm.xml"
 		};
 	}
 	// If those mappings reside somewhere other than resources/org/hibernate/test, change this.
@@ -63,17 +71,112 @@ public class ORMUnitTestCase extends BaseCoreFunctionalTestCase {
 
 		configuration.setProperty( AvailableSettings.SHOW_SQL, Boolean.TRUE.toString() );
 		configuration.setProperty( AvailableSettings.FORMAT_SQL, Boolean.TRUE.toString() );
-		//configuration.setProperty( AvailableSettings.GENERATE_STATISTICS, "true" );
 	}
-
-	// Add your tests, using standard JUnit.
-	@Test
-	public void hhh123Test() throws Exception {
-		// BaseCoreFunctionalTestCase automatically creates the SessionFactory and provides the Session.
+	
+	/** Fill database */
+	@Override
+	protected void prepareTest() throws Exception {
+		super.prepareTest();
 		Session s = openSession();
 		Transaction tx = s.beginTransaction();
-		// Do stuff...
+		
+		ExtendedSettings settings = new ExtendedSettings();
+		settings.setData("some data");
+		
+		ModuleConfiguration conf = new ModuleConfiguration();
+		conf.setSettings(settings);
+		settings.getRelatedConfigurations().add(conf);
+		
+		s.persist(settings);
+		
+		SimpleModule module = new SimpleModule();
+		module.setConfig(conf);
+		
+		s.persist(module);
+		
+		ExtendedSettingsHolder holder = new ExtendedSettingsHolder();
+		holder.setExtendedSettings(settings);
+		
+		s.persist(holder);
+		
 		tx.commit();
 		s.close();
+
+	}
+
+	@Test
+	public void hhh123TestWithTransactionsError() throws Exception {
+		// BaseCoreFunctionalTestCase automatically creates the SessionFactory and provides the Session.
+		Session s = openSession();
+		
+		doInTransaction(s, () -> {
+			List<SimpleModule> modules = s.createQuery("from SimpleModule", SimpleModule.class).list();
+			assertFalse(modules.isEmpty());
+			assertEquals(modules.get(0).getConfig().getSettings().getData(), "some data");
+		});
+
+		doInTransaction(s, () -> {
+			ExtendedSettingsHolder settingsHolder = s.get(ExtendedSettingsHolder.class, 1L);
+			assertNotNull(settingsHolder.getExtendedSettings());
+		});
+
+		s.close();
+	}
+
+	@Test
+	public void hhh123TestWithTransactionsOk() throws Exception {
+		// BaseCoreFunctionalTestCase automatically creates the SessionFactory and provides the Session.
+		Session s = openSession();
+		
+		// INFO: order of transactions is changed, comparing to hhh123TestWithTransactionsError
+		doInTransaction(s, () -> {
+			ExtendedSettingsHolder settingsHolder = s.get(ExtendedSettingsHolder.class, 1L);
+			assertNotNull(settingsHolder.getExtendedSettings());
+		});
+		
+		doInTransaction(s, () -> {
+			List<SimpleModule> modules = s.createQuery("from SimpleModule", SimpleModule.class).list();
+			assertFalse(modules.isEmpty());
+			assertEquals(modules.get(0).getConfig().getSettings().getData(), "some data");
+		});
+
+		s.close();
+	}
+
+	@Test
+	public void hhh123TestWithoutTransactionsError() throws Exception {
+		// BaseCoreFunctionalTestCase automatically creates the SessionFactory and provides the Session.
+		Session s = openSession();
+		
+		List<SimpleModule> modules = s.createQuery("from SimpleModule", SimpleModule.class).list();
+		assertFalse(modules.isEmpty());
+		assertEquals(modules.get(0).getConfig().getSettings().getData(), "some data");
+
+		ExtendedSettingsHolder settingsHolder = s.get(ExtendedSettingsHolder.class, 1L);
+		assertNotNull(settingsHolder.getExtendedSettings());
+
+		s.close();
+	}
+
+	@Test
+	public void hhh123TestWithoutTransactionsOk() throws Exception {
+		// BaseCoreFunctionalTestCase automatically creates the SessionFactory and provides the Session.
+		Session s = openSession();
+		
+		List<SimpleModule> modules = s.createQuery("from SimpleModule", SimpleModule.class).list();
+		assertFalse(modules.isEmpty());
+		// here no actual loading of ExtendedSettings occurred => no error
+		assertNotNull(modules.get(0).getConfig().getSettings());
+
+		ExtendedSettingsHolder settingsHolder = s.get(ExtendedSettingsHolder.class, 1L);
+		assertNotNull(settingsHolder.getExtendedSettings());
+
+		s.close();
+	}
+
+	private void doInTransaction(Session s, Runnable task) {
+		Transaction tx = s.beginTransaction();
+		task.run();
+		tx.commit();
 	}
 }
